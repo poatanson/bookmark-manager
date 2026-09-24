@@ -101,30 +101,58 @@ export async function saveBookmark(
   return { ok: true };
 }
 
-export async function deleteBookmark(id: string) {
-  const supabase = await createClient();
-  await supabase.from("bookmarks").delete().eq("id", id);
-  revalidatePath("/");
+// 에러뿐 아니라 영향받은 행이 0개인 경우(이미 삭제됨, RLS 거부)도 실패로 본다.
+function result(
+  error: { message: string } | null,
+  count: number | null,
+  failMessage: string,
+): ActionResult {
+  if (error) return { ok: false, error: `${failMessage}: ${error.message}` };
+  if (count === 0) return { ok: false, error: `${failMessage}: 이미 삭제되었거나 권한이 없습니다.` };
+  return { ok: true };
 }
 
-export async function toggleFavorite(id: string, isFavorite: boolean) {
+export async function deleteBookmark(id: string): Promise<ActionResult> {
   const supabase = await createClient();
-  await supabase.from("bookmarks").update({ is_favorite: !isFavorite }).eq("id", id);
+  const { error, count } = await supabase
+    .from("bookmarks")
+    .delete({ count: "exact" })
+    .eq("id", id);
   revalidatePath("/");
+  return result(error, count, "북마크를 삭제하지 못했습니다");
+}
+
+export async function toggleFavorite(id: string, isFavorite: boolean): Promise<ActionResult> {
+  const supabase = await createClient();
+  const { error, count } = await supabase
+    .from("bookmarks")
+    .update({ is_favorite: !isFavorite }, { count: "exact" })
+    .eq("id", id);
+  revalidatePath("/");
+  return result(error, count, "즐겨찾기를 변경하지 못했습니다");
 }
 
 // ---------- Folders ----------
 
-export async function addFolder(formData: FormData) {
+export async function addFolder(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
   const name = String(formData.get("name") ?? "").trim();
-  if (!name) return;
+  if (!name) return { ok: false, error: "폴더 이름을 입력하세요." };
   const supabase = await createClient();
-  await supabase.from("folders").insert({ name });
+  const { error } = await supabase.from("folders").insert({ name });
+  if (error) return { ok: false, error: `폴더를 추가하지 못했습니다: ${error.message}` };
   revalidatePath("/");
+  return { ok: true };
 }
 
-export async function deleteFolder(id: string) {
+export async function deleteFolder(id: string): Promise<ActionResult> {
   const supabase = await createClient();
-  await supabase.from("folders").delete().eq("id", id);
+  const { error, count } = await supabase
+    .from("folders")
+    .delete({ count: "exact" })
+    .eq("id", id);
   revalidatePath("/");
+  return result(error, count, "폴더를 삭제하지 못했습니다");
 }

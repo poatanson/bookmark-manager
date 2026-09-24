@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Folder } from "@/lib/types";
 import { addFolder, deleteFolder } from "@/app/actions";
+import ActionForm from "@/components/ActionForm";
 
 type Active = { q?: string; folder?: string; tag?: string; fav?: string };
 
@@ -56,7 +57,7 @@ export default function Sidebar({
               >
                 📁 {f.name}
               </Link>
-              <form
+              <ActionForm
                 action={deleteFolder.bind(null, f.id)}
                 className="absolute top-1/2 right-2 -translate-y-1/2"
               >
@@ -66,16 +67,16 @@ export default function Sidebar({
                 >
                   ✕
                 </button>
-              </form>
+              </ActionForm>
             </li>
           ))}
         </ul>
-        <form action={addFolder} className="mt-2 flex gap-1 px-1">
+        <ActionForm action={addFolder} className="mt-2 flex gap-1 px-1">
           <input name="name" placeholder="새 폴더" required maxLength={100} className="input py-1" />
           <button className="btn-ghost px-2 py-1" title="폴더 추가">
             +
           </button>
-        </form>
+        </ActionForm>
       </details>
 
       {tags.length > 0 && (
