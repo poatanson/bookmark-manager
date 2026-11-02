@@ -1,0 +1,78 @@
+name: Next.js upgrade check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "app/**"
+      - "pages/**"
+      - "src/**"
+      - "next.config.*"
+      - "tsconfig.json"
+      - ".github/workflows/nextjs-upgrade-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          # 프로젝트의 .nvmrc와 동일하게 맞추세요.
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test -- --run
+
+      - name: Build
+        run: npm run build
+
+      - name: Smoke test production server
+        run: |
+          npm run start -- --hostname 127.0.0.1 --port 3000 > /tmp/next-server.log 2>&1 &
+          server_pid=$!
+
+          cleanup() {
+            kill "$server_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3000/ > /dev/null; then
+              echo "Production server responded successfully."
+              exit 0
+            fi
+
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo "Production server exited before becoming ready."
+              cat /tmp/next-server.log
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          echo "Production server did not become ready in time."
+          cat /tmp/next-server.log
+          exit 1
